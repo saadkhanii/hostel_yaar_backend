@@ -1,6 +1,9 @@
+from datetime import datetime
+from typing import Optional
+
 from pydantic import BaseModel, EmailStr, Field
 
-from app.models import UserRole
+from app.models import BookingType, HostelType, UserRole
 
 
 # ---------- Auth: signup / login ----------
@@ -51,3 +54,122 @@ class GoogleAuthRequest(BaseModel):
     id_token: str
     # Only used if this is a first-time signup via Google (role picked in-app).
     role: UserRole = UserRole.seeker
+
+
+# ---------- Rooms ----------
+
+class RoomCreate(BaseModel):
+    """Payload for creating a room. Sent inside HostelCreate, and also
+    used as the request body for the standalone add-room endpoint."""
+
+    number: str = Field(min_length=1)
+    booking_type: BookingType
+    room_type: int = Field(ge=1, le=6)
+    available_seats: int = Field(default=0, ge=0)
+    attached_washroom: bool = False
+    price: int = Field(default=0, ge=0)
+    advance: int = Field(default=0, ge=0)
+    vacant: bool = True
+    availability_dates: list[str] = Field(default_factory=list)
+
+
+class RoomUpdate(BaseModel):
+    """All fields optional — send only what changed."""
+
+    number: Optional[str] = Field(default=None, min_length=1)
+    booking_type: Optional[BookingType] = None
+    room_type: Optional[int] = Field(default=None, ge=1, le=6)
+    available_seats: Optional[int] = Field(default=None, ge=0)
+    attached_washroom: Optional[bool] = None
+    price: Optional[int] = Field(default=None, ge=0)
+    advance: Optional[int] = Field(default=None, ge=0)
+    vacant: Optional[bool] = None
+    availability_dates: Optional[list[str]] = None
+
+
+class RoomResponse(BaseModel):
+    id: str
+    hostel_id: str
+    number: str
+    booking_type: BookingType
+    room_type: int
+    available_seats: int
+    attached_washroom: bool
+    price: int
+    advance: int
+    vacant: bool
+    availability_dates: list[str]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------- Hostels ----------
+
+class HostelCreate(BaseModel):
+    """Payload for POST /hostels. Rooms are created alongside the hostel
+    in the same request, since the warden builds them together in the
+    Add Hostel flow."""
+
+    name: str = Field(min_length=1)
+    city: str = Field(min_length=1)
+    address: str = Field(min_length=1)
+    type: HostelType
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    facilities: list[str] = Field(default_factory=list)
+    photos: list[str] = Field(default_factory=list)
+    phone: str = Field(min_length=1)
+    whatsapp: Optional[str] = None
+    in_app_chat: bool = True
+    active: bool = True
+    rooms: list[RoomCreate] = Field(default_factory=list)
+
+
+class HostelUpdate(BaseModel):
+    """All fields optional — send only what changed."""
+
+    name: Optional[str] = Field(default=None, min_length=1)
+    city: Optional[str] = Field(default=None, min_length=1)
+    address: Optional[str] = Field(default=None, min_length=1)
+    type: Optional[HostelType] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    facilities: Optional[list[str]] = None
+    photos: Optional[list[str]] = None
+    phone: Optional[str] = Field(default=None, min_length=1)
+    whatsapp: Optional[str] = None
+    in_app_chat: Optional[bool] = None
+    active: Optional[bool] = None
+
+
+class HostelSummary(BaseModel):
+    """Lightweight hostel shape for list endpoints. No rooms included —
+    the seeker's list screen only needs the summary fields."""
+
+    id: str
+    warden_id: str
+    name: str
+    city: str
+    address: str
+    type: HostelType
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    facilities: list[str]
+    photos: list[str]
+    phone: str
+    whatsapp: Optional[str] = None
+    in_app_chat: bool
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class HostelDetail(HostelSummary):
+    """Full hostel with its rooms. Used by GET /hostels/{id} and the
+    warden's own listing view."""
+
+    rooms: list[RoomResponse] = Field(default_factory=list)
