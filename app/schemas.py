@@ -146,7 +146,10 @@ class HostelUpdate(BaseModel):
 
 class HostelSummary(BaseModel):
     """Lightweight hostel shape for list endpoints. No rooms included —
-    the seeker's list screen only needs the summary fields."""
+    the seeker's list screen only needs the summary fields.
+
+    `starting_price` is the cheapest room's monthly rent, computed by
+    the router. Defaults to 0 when a hostel has no rooms yet."""
 
     id: str
     warden_id: str
@@ -162,6 +165,7 @@ class HostelSummary(BaseModel):
     whatsapp: Optional[str] = None
     in_app_chat: bool
     active: bool
+    starting_price: int = 0
     created_at: datetime
     updated_at: datetime
 

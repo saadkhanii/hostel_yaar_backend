@@ -54,6 +54,34 @@ def _assert_owner(hostel: Hostel, warden_id: str) -> None:
         )
 
 
+def _starting_price(hostel: Hostel) -> int:
+    """Cheapest room's monthly rent, or 0 if the hostel has no rooms.
+
+    The ORM object doesn't have this field — HostelSummary declares it
+    but the router must supply a value. FastAPI's from_attributes path
+    will pick this up if we attach it before serialization.
+    """
+    if not hostel.rooms:
+        return 0
+    return min(room.price for room in hostel.rooms)
+
+
+def _room_fields(payload: RoomCreate) -> dict:
+    """Convert a RoomCreate schema into model kwargs, keeping the field
+    mapping in one place so add-room and update-room stay in sync."""
+    return {
+        "number": payload.number,
+        "booking_type": payload.booking_type,
+        "room_type": payload.room_type,
+        "available_seats": payload.available_seats,
+        "attached_washroom": payload.attached_washroom,
+        "price": payload.price,
+        "advance": payload.advance,
+        "vacant": payload.vacant,
+        "availability_dates": payload.availability_dates,
+    }
+
+
 # ---------- POST /hostels  (add_hostel.dart) ----------
 
 @router.post("", response_model=HostelDetail, status_code=status.HTTP_201_CREATED)
@@ -87,23 +115,9 @@ def create_hostel(
 
     db.commit()
     db.refresh(hostel)
+    # Attach computed field so HostelDetail serialization includes it.
+    hostel.starting_price = _starting_price(hostel)
     return hostel
-
-
-def _room_fields(payload: RoomCreate) -> dict:
-    """Convert a RoomCreate schema into model kwargs, keeping the field
-    mapping in one place so add-room and update-room stay in sync."""
-    return {
-        "number": payload.number,
-        "booking_type": payload.booking_type,
-        "room_type": payload.room_type,
-        "available_seats": payload.available_seats,
-        "attached_washroom": payload.attached_washroom,
-        "price": payload.price,
-        "advance": payload.advance,
-        "vacant": payload.vacant,
-        "availability_dates": payload.availability_dates,
-    }
 
 
 # ---------- GET /hostels  (hostel_list.dart, seeker_dashboard.dart) ----------
@@ -119,7 +133,7 @@ def list_hostels(
     """Public listing. Filters are all optional. Inactive hostels are
     hidden by default so a warden can draft a listing without it
     appearing in searches."""
-    query = db.query(Hostel)
+    query = db.query(Hostel).options(joinedload(Hostel.rooms))
 
     if not include_inactive:
         query = query.filter(Hostel.active.is_(True))
@@ -131,7 +145,10 @@ def list_hostels(
     if q:
         query = query.filter(Hostel.name.ilike(f"%{q}%"))
 
-    return query.order_by(Hostel.created_at.desc()).all()
+    hostels = query.order_by(Hostel.created_at.desc()).all()
+    for h in hostels:
+        h.starting_price = _starting_price(h)
+    return hostels
 
 
 # ---------- GET /hostels/mine  (manage_hostels.dart) ----------
@@ -144,20 +161,25 @@ def list_my_hostels(
     """Returns the logged-in warden's own hostels, including inactive
     ones, with rooms loaded. This is what Manage Hostels shows."""
     warden_id = _require_warden(current_user)
-    return (
+    hostels = (
         db.query(Hostel)
         .options(joinedload(Hostel.rooms))
         .filter(Hostel.warden_id == warden_id)
         .order_by(Hostel.created_at.desc())
         .all()
     )
+    for h in hostels:
+        h.starting_price = _starting_price(h)
+    return hostels
 
 
 # ---------- GET /hostels/{hostel_id}  (hostel_detail.dart) ----------
 
 @router.get("/{hostel_id}", response_model=HostelDetail)
 def get_hostel(hostel_id: str, db: Session = Depends(get_db)):
-    return _get_hostel_or_404(db, hostel_id)
+    hostel = _get_hostel_or_404(db, hostel_id)
+    hostel.starting_price = _starting_price(hostel)
+    return hostel
 
 
 # ---------- PUT /hostels/{hostel_id}  (edit_hostel_screen.dart) ----------
@@ -180,6 +202,7 @@ def update_hostel(
 
     db.commit()
     db.refresh(hostel)
+    hostel.starting_price = _starting_price(hostel)
     return hostel
 
 
