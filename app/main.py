@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
 from app.routers import auth
+from app.routers import auth, hostels
 
 # Creates tables if they don't exist yet. Fine for now; once this app is
 # in production you'd switch to Alembic migrations instead.
@@ -21,6 +22,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(hostels.router)
 
 
 @app.get("/")
