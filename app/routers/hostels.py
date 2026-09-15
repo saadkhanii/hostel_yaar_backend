@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.models import Hostel, HostelType, Room, User, UserRole
+from app.models import BookingType, Hostel, HostelType, Room, User, UserRole
 from app.schemas import (
     HostelCreate,
     HostelDetail,
@@ -65,6 +65,16 @@ def _starting_price(hostel: Hostel) -> int:
         return 0
     return min(room.price for room in hostel.rooms)
 
+def _has_vacancy(hostel: Hostel) -> bool:
+    """True if any room has an open seat or is a vacant whole-room listing."""
+    for room in hostel.rooms:
+        if room.booking_type == BookingType.seat:
+            if room.available_seats > 0:
+                return True
+        else:
+            if room.vacant:
+                return True
+    return False
 
 def _room_fields(payload: RoomCreate) -> dict:
     """Convert a RoomCreate schema into model kwargs, keeping the field
@@ -148,6 +158,8 @@ def list_hostels(
     hostels = query.order_by(Hostel.created_at.desc()).all()
     for h in hostels:
         h.starting_price = _starting_price(h)
+        h.has_vacancy = _has_vacancy(h)
+        h.room_count = len(h.rooms)
     return hostels
 
 
@@ -170,6 +182,8 @@ def list_my_hostels(
     )
     for h in hostels:
         h.starting_price = _starting_price(h)
+        h.has_vacancy = _has_vacancy(h)
+        h.room_count = len(h.rooms)
     return hostels
 
 
