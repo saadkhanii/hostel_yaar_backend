@@ -173,3 +173,4 @@ class HostelDetail(HostelSummary):
     warden's own listing view."""
 
     rooms: list[RoomResponse] = Field(default_factory=list)
+

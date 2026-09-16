@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -181,3 +182,30 @@ class Room(Base):
     )
 
     hostel = relationship("Hostel", back_populates="rooms")
+
+class SavedHostel(Base):
+    """A seeker has saved a hostel for later. Unique per (user, hostel) pair."""
+
+    __tablename__ = "saved_hostels"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    hostel_id = Column(
+        String,
+        ForeignKey("hostels.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at = Column(DateTime, default=lambda: datetime.utcnow())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "hostel_id", name="uq_saved_hostel_user_hostel"),
+    )
+
+    user = relationship("User", backref="saved_hostels")
+    hostel = relationship("Hostel", backref="saved_by")
