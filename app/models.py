@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -39,6 +40,11 @@ class HostelType(str, enum.Enum):
 class BookingType(str, enum.Enum):
     room = "Room"   # whole room booked together
     seat = "Seat"   # individual seat/bed booked separately
+
+class BookingStatus(str, enum.Enum):
+    pending = "pending"
+    accepted = "accepted"
+    rejected = "rejected"
 
 
 # ── Auth ─────────────────────────────────────────────────────────────
@@ -209,3 +215,48 @@ class SavedHostel(Base):
 
     user = relationship("User", backref="saved_hostels")
     hostel = relationship("Hostel", backref="saved_by")
+
+class BookingRequest(Base):
+    """A seeker asking a warden to book a specific room, for a specific
+    move-in date. Wardens accept or reject; the request is immutable
+    after that."""
+
+    __tablename__ = "booking_requests"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    seeker_id = Column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    hostel_id = Column(
+        String,
+        ForeignKey("hostels.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    room_id = Column(
+        String,
+        ForeignKey("rooms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    move_in_date = Column(DateTime, nullable=False)
+    message = Column(Text, nullable=True)
+    warden_reply = Column(Text, nullable=True)
+
+    status = Column(
+        Enum(BookingStatus),
+        nullable=False,
+        default=BookingStatus.pending,
+        index=True,
+    )
+
+    created_at = Column(DateTime, default=lambda: datetime.utcnow())
+    responded_at = Column(DateTime, nullable=True)
+
+    seeker = relationship("User", foreign_keys=[seeker_id])
+    hostel = relationship("Hostel")
+    room = relationship("Room")

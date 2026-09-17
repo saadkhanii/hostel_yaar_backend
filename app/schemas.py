@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
-from app.models import BookingType, HostelType, UserRole
+from app.models import BookingStatus, BookingType, HostelType, UserRole
 
 
 # ---------- Auth: signup / login ----------
@@ -174,3 +174,47 @@ class HostelDetail(HostelSummary):
 
     rooms: list[RoomResponse] = Field(default_factory=list)
 
+# ---------- Booking Requests ----------
+
+class BookingRequestCreate(BaseModel):
+    """Payload for POST /booking-requests. The seeker is derived from
+    the JWT — they can't create requests on behalf of anyone else."""
+
+    hostel_id: str
+    room_id: str
+    move_in_date: datetime
+    message: Optional[str] = Field(default=None, max_length=500)
+
+
+class BookingRequestWardenAction(BaseModel):
+    """Body for accept/reject. Both fields are optional."""
+
+    warden_reply: Optional[str] = Field(default=None, max_length=500)
+
+
+class BookingRequestResponse(BaseModel):
+    """Full request shape, including a compact snapshot of the hostel
+    and room so both seeker and warden screens can render without
+    extra fetches."""
+
+    id: str
+    seeker_id: str
+    hostel_id: str
+    room_id: str
+    move_in_date: datetime
+    message: Optional[str] = None
+    warden_reply: Optional[str] = None
+    status: BookingStatus # 'pending' | 'accepted' | 'rejected'
+    created_at: datetime
+    responded_at: Optional[datetime] = None
+
+    # Denormalized snapshots for list views.
+    seeker_name: str = ""
+    seeker_phone: Optional[str] = None
+    hostel_name: str = ""
+    hostel_city: str = ""
+    room_number: str = ""
+    room_type: int = 0
+    room_booking_type: str = ""
+    room_price: int = 0
+    room_advance: int = 0
