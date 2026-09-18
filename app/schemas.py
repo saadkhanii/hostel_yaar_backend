@@ -218,3 +218,29 @@ class BookingRequestResponse(BaseModel):
     room_booking_type: str = ""
     room_price: int = 0
     room_advance: int = 0
+
+# ---------- Profile / Account ----------
+
+class UpdateProfileRequest(BaseModel):
+    """Partial update — send only the fields you want to change."""
+
+    full_name: Optional[str] = Field(default=None, min_length=1)
+    phone: Optional[str] = Field(default=None, max_length=30)
+
+
+class UserSummary(BaseModel):
+    """Public-facing user info returned after a profile update or when
+    the client wants to refresh cached identity data."""
+
+    id: str
+    full_name: str
+    email: str
+    role: UserRole
+    phone: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=6)

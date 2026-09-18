@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.utils.deps import get_current_user
+
 from app.config import settings
 from app.database import get_db
 from app.models import User, PasswordResetOTP, UserRole
@@ -14,6 +16,9 @@ from app.schemas import (
     VerifyOtpRequest,
     ResetPasswordRequest,
     GoogleAuthRequest,
+    UpdateProfileRequest,
+    UserSummary,
+    ChangePasswordRequest,
 )
 from app.utils.security import hash_password, verify_password, create_access_token
 from app.utils.otp import generate_otp_code, send_otp_email
@@ -182,3 +187,72 @@ def google_auth(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
         db.refresh(user)
 
     return _auth_response(user)
+
+# ---------- Profile / Account ----------
+
+@router.patch("/me", response_model=UserSummary)
+def update_profile(
+    payload: UpdateProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Update the logged-in user's name and/or phone. Email change is
+    intentionally not supported here — that requires its own
+    verification flow."""
+    user_id = current_user["sub"]
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if payload.full_name is not None:
+        user.full_name = payload.full_name.strip()
+    if payload.phone is not None:
+        cleaned = payload.phone.strip()
+        user.phone = cleaned if cleaned else None
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.patch("/change-password", status_code=status.HTTP_200_OK)
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Change the logged-in user's password. Requires the current
+    password for verification."""
+    user_id = current_user["sub"]
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Google-only accounts have no password of ours.
+    if not user.hashed_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account has no password set (signed up via Google)",
+        )
+
+    if not verify_password(payload.old_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    if payload.old_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from the current one",
+        )
+
+    user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+    return {"status": "ok"}

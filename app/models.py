@@ -59,6 +59,9 @@ class User(Base):
     # Nullable because a user who signs up via Google has no password of ours.
     hashed_password = Column(String, nullable=True)
 
+    # Optional contact number — added post-signup from the Profile screen.
+    phone = Column(String, nullable=True)
+
     role = Column(Enum(UserRole), nullable=False, default=UserRole.seeker)
 
     # Set when the account was created/linked via "Continue with Google".
