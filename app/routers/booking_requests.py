@@ -17,6 +17,11 @@ from app.schemas import (
     BookingRequestWardenAction,
 )
 from app.utils.deps import get_current_user
+from app.utils.notifications import (
+    notify_seeker_booking_accepted,
+    notify_seeker_booking_rejected,
+    notify_warden_booking_created,
+)
 
 router = APIRouter(prefix="/booking-requests", tags=["booking-requests"])
 
@@ -141,6 +146,18 @@ def create_booking_request(
 
     # Reload with eager relations for the response.
     req = _base_query(db).filter(BookingRequest.id == req.id).first()
+
+    # Notify the warden.
+    notify_warden_booking_created(
+        db,
+        warden_id=req.hostel.warden_id,
+        seeker_name=req.seeker.full_name if req.seeker else "A seeker",
+        hostel_name=req.hostel.name if req.hostel else "",
+        room_number=req.room.number if req.room else "",
+        booking_id=req.id,
+    )
+    db.commit()
+
     return _to_response(req)
 
 
@@ -218,6 +235,17 @@ def accept_request(
     req.responded_at = datetime.utcnow()
     db.commit()
     db.refresh(req)
+
+    # Notify the seeker.
+    notify_seeker_booking_accepted(
+        db,
+        seeker_id=req.seeker_id,
+        hostel_name=req.hostel.name if req.hostel else "",
+        room_number=req.room.number if req.room else "",
+        booking_id=req.id,
+    )
+    db.commit()
+
     return _to_response(req)
 
 
@@ -257,4 +285,15 @@ def reject_request(
     req.responded_at = datetime.utcnow()
     db.commit()
     db.refresh(req)
+
+    # Notify the seeker.
+    notify_seeker_booking_rejected(
+        db,
+        seeker_id=req.seeker_id,
+        hostel_name=req.hostel.name if req.hostel else "",
+        room_number=req.room.number if req.room else "",
+        booking_id=req.id,
+    )
+    db.commit()
+
     return _to_response(req)

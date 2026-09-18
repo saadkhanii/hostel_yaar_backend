@@ -3,7 +3,13 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
-from app.models import BookingStatus, BookingType, HostelType, UserRole
+from app.models import (
+    BookingStatus,
+    BookingType,
+    HostelType,
+    NotificationType,
+    UserRole,
+)
 
 
 # ---------- Auth: signup / login ----------
@@ -27,6 +33,7 @@ class AuthResponse(BaseModel):
     full_name: str
     email: str
     role: UserRole
+    profile_picture_url: Optional[str] = None
 
 
 # ---------- Forgot password / OTP ----------
@@ -226,6 +233,7 @@ class UpdateProfileRequest(BaseModel):
 
     full_name: Optional[str] = Field(default=None, min_length=1)
     phone: Optional[str] = Field(default=None, max_length=30)
+    profile_picture_url: Optional[str] = Field(default=None, max_length=500)
 
 
 class UserSummary(BaseModel):
@@ -237,6 +245,7 @@ class UserSummary(BaseModel):
     email: str
     role: UserRole
     phone: Optional[str] = None
+    profile_picture_url: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -244,3 +253,20 @@ class UserSummary(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str = Field(min_length=1)
     new_password: str = Field(min_length=6)
+
+# ---------- Notifications ----------
+
+class NotificationResponse(BaseModel):
+    id: str
+    type: NotificationType
+    title: str
+    body: Optional[str] = None
+    related_id: Optional[str] = None
+    is_read: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UnreadCountResponse(BaseModel):
+    count: int

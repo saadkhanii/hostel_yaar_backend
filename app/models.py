@@ -46,6 +46,11 @@ class BookingStatus(str, enum.Enum):
     accepted = "accepted"
     rejected = "rejected"
 
+class NotificationType(str, enum.Enum):
+    booking_created = "booking_created"   # seeker requested → warden
+    booking_accepted = "booking_accepted" # warden accepted → seeker
+    booking_rejected = "booking_rejected" # warden rejected → seeker
+
 
 # ── Auth ─────────────────────────────────────────────────────────────
 
@@ -61,6 +66,10 @@ class User(Base):
 
     # Optional contact number — added post-signup from the Profile screen.
     phone = Column(String, nullable=True)
+
+    # Optional Cloudinary URL for the user's avatar. Null means no photo
+    # yet — the Flutter side falls back to initials.
+    profile_picture_url = Column(String, nullable=True)
 
     role = Column(Enum(UserRole), nullable=False, default=UserRole.seeker)
 
@@ -263,3 +272,33 @@ class BookingRequest(Base):
     seeker = relationship("User", foreign_keys=[seeker_id])
     hostel = relationship("Hostel")
     room = relationship("Room")
+
+class Notification(Base):
+    """In-app notification for a user. Created by booking events; the
+    Flutter drawer and alerts tab render these. `related_id` points at
+    the object the notification is about (currently a BookingRequest id),
+    so tapping a notification can navigate to the right screen."""
+
+    __tablename__ = "notifications"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    type = Column(Enum(NotificationType), nullable=False)
+
+    title = Column(String, nullable=False)
+    body = Column(String, nullable=True)
+
+    # Optional FK to the related object. Kept as a plain string (not a
+    # real FK) so we don't have to worry about cascade behavior when the
+    # target row is deleted — the notification just becomes stale.
+    related_id = Column(String, nullable=True, index=True)
+
+    is_read = Column(Boolean, nullable=False, default=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.utcnow())
+
+    user = relationship("User")

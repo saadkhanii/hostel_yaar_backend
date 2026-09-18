@@ -35,6 +35,7 @@ def _auth_response(user: User) -> AuthResponse:
         full_name=user.full_name,
         email=user.email,
         role=user.role,
+        profile_picture_url=user.profile_picture_url,
     )
 
 
@@ -212,6 +213,10 @@ def update_profile(
     if payload.phone is not None:
         cleaned = payload.phone.strip()
         user.phone = cleaned if cleaned else None
+    if payload.profile_picture_url is not None:
+        # Empty string means "remove the picture".
+        cleaned = payload.profile_picture_url.strip()
+        user.profile_picture_url = cleaned if cleaned else None
 
     db.commit()
     db.refresh(user)
