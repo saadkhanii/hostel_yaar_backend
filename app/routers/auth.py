@@ -19,6 +19,7 @@ from app.schemas import (
     UpdateProfileRequest,
     UserSummary,
     ChangePasswordRequest,
+    FcmTokenRequest,
 )
 from app.utils.security import hash_password, verify_password, create_access_token
 from app.utils.otp import generate_otp_code, send_otp_email
@@ -282,5 +283,27 @@ def update_fcm_token(
         raise HTTPException(status_code=404, detail="User not found")
 
     user.fcm_token = token
+    db.commit()
+    return {"status": "ok"}
+
+# ---------- FCM token ----------
+
+@router.patch("/me/fcm-token", status_code=status.HTTP_200_OK)
+def update_fcm_token(
+    payload: FcmTokenRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Save the device's FCM token so the backend can send push
+    notifications to this user."""
+    user_id = current_user["sub"]
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    user.fcm_token = payload.fcm_token
     db.commit()
     return {"status": "ok"}

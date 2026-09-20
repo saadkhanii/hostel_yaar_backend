@@ -41,6 +41,8 @@ class AuthResponse(BaseModel):
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
+class FcmTokenRequest(BaseModel):
+    fcm_token: str = Field(min_length=1, max_length=500)
 
 class VerifyOtpRequest(BaseModel):
     email: EmailStr
