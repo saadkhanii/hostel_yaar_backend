@@ -261,3 +261,26 @@ def change_password(
     user.hashed_password = hash_password(payload.new_password)
     db.commit()
     return {"status": "ok"}
+
+@router.patch("/me/fcm-token", status_code=status.HTTP_200_OK)
+def update_fcm_token(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Save the device's FCM token so the backend can send push
+    notifications to this user."""
+    token = payload.get("fcm_token")
+    if not token or not isinstance(token, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="fcm_token is required",
+        )
+    user_id = current_user["sub"]
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.fcm_token = token
+    db.commit()
+    return {"status": "ok"}

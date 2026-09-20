@@ -60,6 +60,7 @@ class User(Base):
     id = Column(String, primary_key=True, default=_uuid)
     full_name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
+    fcm_token = Column(String, nullable=True)
 
     # Nullable because a user who signs up via Google has no password of ours.
     hashed_password = Column(String, nullable=True)
