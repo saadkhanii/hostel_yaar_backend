@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # This is the "Web client ID" from Google Cloud Console, NOT a secret.
     google_client_id: str = ""
 
+    # --- Firebase Admin SDK (for sending push notifications) ---
+    # Path to the service account JSON file. In production this points
+    # at a file mounted from an environment variable.
+    firebase_credentials_path: str = "firebase-service-account.json"
+
     # --- OTP (for forgot-password flow) ---
     otp_expire_minutes: int = 10
 

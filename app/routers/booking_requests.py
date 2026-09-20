@@ -1,3 +1,5 @@
+from app.models import User  # add to existing app.models import
+from app.utils.fcm import send_push
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -147,7 +149,6 @@ def create_booking_request(
     # Reload with eager relations for the response.
     req = _base_query(db).filter(BookingRequest.id == req.id).first()
 
-    # Notify the warden.
     notify_warden_booking_created(
         db,
         warden_id=req.hostel.warden_id,
@@ -157,6 +158,16 @@ def create_booking_request(
         booking_id=req.id,
     )
     db.commit()
+
+    # Send a push to the warden's device, if any.
+    warden = db.query(User).filter(User.id == req.hostel.warden_id).first()
+    if warden and warden.fcm_token:
+        send_push(
+            token=warden.fcm_token,
+            title="New booking request",
+            body=f"{req.seeker.full_name if req.seeker else 'A seeker'} requested Room {req.room.number if req.room else ''}.",
+            data={"type": "booking_created", "booking_id": req.id},
+        )
 
     return _to_response(req)
 
@@ -246,6 +257,15 @@ def accept_request(
     )
     db.commit()
 
+    seeker = db.query(User).filter(User.id == req.seeker_id).first()
+    if seeker and seeker.fcm_token:
+        send_push(
+            token=seeker.fcm_token,
+            title="Request accepted",
+            body=f"Your request for Room {req.room.number if req.room else ''} was accepted.",
+            data={"type": "booking_accepted", "booking_id": req.id},
+        )
+
     return _to_response(req)
 
 
@@ -295,5 +315,14 @@ def reject_request(
         booking_id=req.id,
     )
     db.commit()
+
+    seeker = db.query(User).filter(User.id == req.seeker_id).first()
+    if seeker and seeker.fcm_token:
+        send_push(
+            token=seeker.fcm_token,
+            title="Request rejected",
+            body=f"Your request for Room {req.room.number if req.room else ''} was rejected.",
+            data={"type": "booking_rejected", "booking_id": req.id},
+        )
 
     return _to_response(req)
