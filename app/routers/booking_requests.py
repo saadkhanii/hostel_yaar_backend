@@ -1,4 +1,4 @@
-from app.models import User  # add to existing app.models import
+from app.models import BookingType, User  # add to existing app.models import
 from app.utils.fcm import send_push
 from datetime import datetime
 
@@ -55,6 +55,7 @@ def _to_response(req: BookingRequest) -> BookingRequestResponse:
         seeker_id=req.seeker_id,
         hostel_id=req.hostel_id,
         room_id=req.room_id,
+        seat_requested=req.seat_requested,
         move_in_date=req.move_in_date,
         message=req.message,
         warden_reply=req.warden_reply,
@@ -138,6 +139,7 @@ def create_booking_request(
         seeker_id=seeker_id,
         hostel_id=payload.hostel_id,
         room_id=payload.room_id,
+        seat_requested=room.booking_type == BookingType.seat,
         move_in_date=payload.move_in_date,
         message=payload.message,
         status=BookingStatus.pending,

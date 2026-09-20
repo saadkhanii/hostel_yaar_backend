@@ -210,6 +210,7 @@ class BookingRequestResponse(BaseModel):
     seeker_id: str
     hostel_id: str
     room_id: str
+    seat_requested: bool = False
     move_in_date: datetime
     message: Optional[str] = None
     warden_reply: Optional[str] = None

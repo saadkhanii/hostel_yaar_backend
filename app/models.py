@@ -267,6 +267,8 @@ class BookingRequest(Base):
         index=True,
     )
 
+    seat_requested = Column(Boolean, nullable=False, default=False)
+
     created_at = Column(DateTime, default=lambda: datetime.utcnow())
     responded_at = Column(DateTime, nullable=True)
 
