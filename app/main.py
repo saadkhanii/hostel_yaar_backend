@@ -1,3 +1,9 @@
+
+import os
+
+_present = bool(os.getenv("FIREBASE_CREDENTIALS_JSON"))
+_len = len(os.getenv("FIREBASE_CREDENTIALS_JSON") or "")
+print(f"[startup] FIREBASE_CREDENTIALS_JSON present={_present} length={_len}")
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
