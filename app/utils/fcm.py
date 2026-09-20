@@ -1,11 +1,14 @@
 """Firebase Cloud Messaging sender.
 
-Initializes the Firebase Admin SDK once at import time (lazily) and
-provides a simple `send_push()` that delivers a notification to a
-single device token.
+Initializes the Firebase Admin SDK lazily on first use and exposes
+`send_push()` for delivering a notification to a single device token.
+Failures are logged, never raised — a broken push should not break a
+booking flow.
 """
 
+import json
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -16,34 +19,49 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize lazily — only the first call actually sets up the SDK.
 _initialized = False
 
 
 def _ensure_initialized() -> bool:
-    """Initialize the Firebase Admin SDK from the service account file.
+    """Initialize the Firebase Admin SDK from env var or file.
 
-    Returns True if initialization succeeded (or was already done),
-    False otherwise. Failures are logged but not raised — a push
-    notification is a nice-to-have, not a critical path.
+    In production, credentials come from FIREBASE_CREDENTIALS_JSON
+    (a full JSON string set as an env var on Render). In local dev,
+    they come from a file at settings.firebase_credentials_path.
+
+    Returns True if initialized, False otherwise. Logs the reason on
+    failure but never raises.
     """
     global _initialized
     if _initialized:
         return True
 
+    raw_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
     creds_path = Path(settings.firebase_credentials_path)
-    if not creds_path.exists():
-        logger.warning(
-            "Firebase credentials not found at %s — push notifications disabled",
-            creds_path,
-        )
-        return False
+
+    # TEMP DEBUG — remove after this investigation
+    logger.warning(
+        "FCM DEBUG: raw_json is None = %s, raw_json length = %s",
+        raw_json is None,
+        len(raw_json) if raw_json else 0,
+    )
 
     try:
-        cred = credentials.Certificate(str(creds_path))
+        if raw_json:
+            cred = credentials.Certificate(json.loads(raw_json))
+        elif creds_path.exists():
+            cred = credentials.Certificate(str(creds_path))
+        else:
+            logger.warning(
+                "Firebase credentials not found at %s — push notifications disabled",
+                creds_path,
+            )
+            return False
+
         if not firebase_admin._apps:
             firebase_admin.initialize_app(cred)
         _initialized = True
+        logger.info("Firebase Admin SDK initialized")
         return True
     except Exception:
         logger.exception("Failed to initialize Firebase Admin SDK")
@@ -59,8 +77,8 @@ def send_push(
 ) -> None:
     """Send a push notification to a single FCM token.
 
-    Silently does nothing if the token is empty or the SDK isn't
-    initialized. Errors are logged, not raised.
+    Silently no-ops if the token is empty or the SDK isn't initialized.
+    Never raises.
     """
     if not token:
         return
