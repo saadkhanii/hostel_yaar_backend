@@ -69,3 +69,23 @@ def notify_seeker_booking_rejected(
             related_id=booking_id,
         )
     )
+
+def notify_warden_booking_cancelled(
+    db: Session,
+    *,
+    warden_id: str,
+    seeker_name: str,
+    hostel_name: str,
+    room_number: str,
+    booking_id: str,
+) -> None:
+    """Called when a seeker cancels their pending request."""
+    db.add(
+        Notification(
+            user_id=warden_id,
+            type=NotificationType.booking_cancelled,
+            title="Booking request cancelled",
+            body=f"{seeker_name} cancelled their request for Room {room_number} at {hostel_name}.",
+            related_id=booking_id,
+        )
+    )

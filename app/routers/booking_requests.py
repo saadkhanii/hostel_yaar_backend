@@ -22,6 +22,7 @@ from app.utils.deps import get_current_user
 from app.utils.notifications import (
     notify_seeker_booking_accepted,
     notify_seeker_booking_rejected,
+    notify_warden_booking_cancelled,
     notify_warden_booking_created,
 )
 
@@ -82,6 +83,21 @@ def _base_query(db: Session):
         joinedload(BookingRequest.hostel),
         joinedload(BookingRequest.room),
     )
+
+def _consume_seat(db: Session, room: Room, seat_requested: bool) -> None:
+    """Mark a room's availability as reduced by an accepted booking.
+
+    - Per-Seat request: decrement available_seats by 1. If it drops to 0,
+      the room shows as full.
+    - Whole-room request: set vacant = False and available_seats = 0.
+    """
+    if seat_requested:
+        room.available_seats = max(0, (room.available_seats or 0) - 1)
+        if room.available_seats == 0:
+            room.vacant = False
+    else:
+        room.vacant = False
+        room.available_seats = 0
 
 
 # ---------- POST /booking-requests  (hostel_detail.dart) ----------
@@ -246,6 +262,11 @@ def accept_request(
     req.status = BookingStatus.accepted
     req.warden_reply = payload.warden_reply
     req.responded_at = datetime.utcnow()
+
+    # Consume the room/seat so it no longer shows as available.
+    if req.room:
+        _consume_seat(db, req.room, req.seat_requested)
+
     db.commit()
     db.refresh(req)
 
@@ -328,3 +349,55 @@ def reject_request(
         )
 
     return _to_response(req)
+
+# ---------- DELETE /booking-requests/{id}  (seeker cancels own pending request) ----------
+
+@router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_booking_request(
+    request_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Seeker cancels their own pending request. Rejected/accepted
+    requests cannot be cancelled — the warden already acted."""
+    seeker_id = _require_seeker(current_user)
+
+    req = _base_query(db).filter(BookingRequest.id == request_id).first()
+    if req is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Booking request not found",
+        )
+    if req.seeker_id != seeker_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This is not your request",
+        )
+    if req.status != BookingStatus.pending:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot cancel a {req.status.value} request",
+        )
+
+    # Snapshot values we need before deleting.
+    warden_id = req.hostel.warden_id if req.hostel else None
+    seeker_name = req.seeker.full_name if req.seeker else "A seeker"
+    hostel_name = req.hostel.name if req.hostel else ""
+    room_number = req.room.number if req.room else ""
+
+    db.delete(req)
+    db.commit()
+
+    # Notify the warden.
+    if warden_id:
+        notify_warden_booking_cancelled(
+            db,
+            warden_id=warden_id,
+            seeker_name=seeker_name,
+            hostel_name=hostel_name,
+            room_number=room_number,
+            booking_id=request_id,
+        )
+        db.commit()
+
+    return None

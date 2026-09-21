@@ -47,10 +47,10 @@ class BookingStatus(str, enum.Enum):
     rejected = "rejected"
 
 class NotificationType(str, enum.Enum):
-    booking_created = "booking_created"   # seeker requested → warden
-    booking_accepted = "booking_accepted" # warden accepted → seeker
-    booking_rejected = "booking_rejected" # warden rejected → seeker
-
+    booking_created = "booking_created"
+    booking_accepted = "booking_accepted"
+    booking_rejected = "booking_rejected"
+    booking_cancelled = "booking_cancelled"
 
 # ── Auth ─────────────────────────────────────────────────────────────
 
@@ -267,8 +267,7 @@ class BookingRequest(Base):
         index=True,
     )
 
-    seat_requested = Column(Boolean, nullable=False, default=False)
-
+    seat_requested = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime, default=lambda: datetime.utcnow())
     responded_at = Column(DateTime, nullable=True)
 
