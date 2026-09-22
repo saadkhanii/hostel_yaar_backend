@@ -3,6 +3,7 @@ from app.utils.fcm import send_push
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -57,6 +58,7 @@ def _to_response(req: BookingRequest) -> BookingRequestResponse:
         hostel_id=req.hostel_id,
         room_id=req.room_id,
         seat_requested=req.seat_requested,
+        seat_count=req.seat_count,
         move_in_date=req.move_in_date,
         message=req.message,
         warden_reply=req.warden_reply,
@@ -84,15 +86,15 @@ def _base_query(db: Session):
         joinedload(BookingRequest.room),
     )
 
-def _consume_seat(db: Session, room: Room, seat_requested: bool) -> None:
+def _consume_seat(db: Session, room: Room, seat_requested: bool, count: int) -> None:
     """Mark a room's availability as reduced by an accepted booking.
 
-    - Per-Seat request: decrement available_seats by 1. If it drops to 0,
-      the room shows as full.
+    - Per-Seat request: decrement available_seats by `count`. If it drops
+      to 0, the room shows as full.
     - Whole-room request: set vacant = False and available_seats = 0.
     """
     if seat_requested:
-        room.available_seats = max(0, (room.available_seats or 0) - 1)
+        room.available_seats = max(0, (room.available_seats or 0) - count)
         if room.available_seats == 0:
             room.vacant = False
     else:
@@ -135,27 +137,59 @@ def create_booking_request(
             detail="This hostel is not currently accepting requests",
         )
 
-    # One pending request per room per seeker.
-    existing = (
-        db.query(BookingRequest)
-        .filter(
-            BookingRequest.seeker_id == seeker_id,
-            BookingRequest.room_id == payload.room_id,
-            BookingRequest.status == BookingStatus.pending,
+        is_seat_request = room.booking_type == BookingType.seat
+
+    if is_seat_request:
+        # Seeker can stack pending requests up to the room's available
+        # seats. Validate that the total requested does not exceed
+        # what's actually free.
+        pending_count = (
+            db.query(BookingRequest)
+            .filter(
+                BookingRequest.seeker_id == seeker_id,
+                BookingRequest.room_id == payload.room_id,
+                BookingRequest.status == BookingStatus.pending,
+            )
+            .with_entities(func.coalesce(func.sum(BookingRequest.seat_count), 0))
+            .scalar()
+        ) or 0
+
+        available = room.available_seats or 0
+        remaining = available - pending_count
+
+        if payload.seat_count > remaining:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Only {remaining} seat(s) left — your pending requests "
+                    f"already cover {pending_count}."
+                    if remaining > 0
+                    else "All available seats are already covered by your pending requests."
+                ),
+            )
+    else:
+        # Whole-room listing: only one pending request makes sense.
+        existing = (
+            db.query(BookingRequest)
+            .filter(
+                BookingRequest.seeker_id == seeker_id,
+                BookingRequest.room_id == payload.room_id,
+                BookingRequest.status == BookingStatus.pending,
+            )
+            .first()
         )
-        .first()
-    )
-    if existing is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You already have a pending request for this room",
-        )
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You already have a pending request for this room",
+            )
 
     req = BookingRequest(
         seeker_id=seeker_id,
         hostel_id=payload.hostel_id,
         room_id=payload.room_id,
-        seat_requested=room.booking_type == BookingType.seat,
+        seat_requested=is_seat_request,
+        seat_count=payload.seat_count if is_seat_request else 1,
         move_in_date=payload.move_in_date,
         message=payload.message,
         status=BookingStatus.pending,
@@ -264,8 +298,9 @@ def accept_request(
     req.responded_at = datetime.utcnow()
 
     # Consume the room/seat so it no longer shows as available.
+        # Consume the room/seat so it no longer shows as available.
     if req.room:
-        _consume_seat(db, req.room, req.seat_requested)
+        _consume_seat(db, req.room, req.seat_requested, req.seat_count)
 
     db.commit()
     db.refresh(req)

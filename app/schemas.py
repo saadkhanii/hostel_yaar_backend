@@ -186,13 +186,14 @@ class HostelDetail(HostelSummary):
 # ---------- Booking Requests ----------
 
 class BookingRequestCreate(BaseModel):
-    """Payload for POST /booking-requests. The seeker is derived from
-    the JWT — they can't create requests on behalf of anyone else."""
-
     hostel_id: str
     room_id: str
     move_in_date: datetime
     message: Optional[str] = Field(default=None, max_length=500)
+    # Number of seats requested. Ignored (forced to 1) for whole-room
+    # listings. Validated against the room's remaining capacity for
+    # Per Seat listings.
+    seat_count: int = Field(default=1, ge=1, le=20)
 
 
 class BookingRequestWardenAction(BaseModel):
@@ -211,6 +212,7 @@ class BookingRequestResponse(BaseModel):
     hostel_id: str
     room_id: str
     seat_requested: bool = False
+    seat_count: int = 1
     move_in_date: datetime
     message: Optional[str] = None
     warden_reply: Optional[str] = None
