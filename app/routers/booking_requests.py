@@ -137,7 +137,7 @@ def create_booking_request(
             detail="This hostel is not currently accepting requests",
         )
 
-        is_seat_request = room.booking_type == BookingType.seat
+    is_seat_request = room.booking_type == BookingType.seat
 
     if is_seat_request:
         # Seeker can stack pending requests up to the room's available
@@ -298,7 +298,6 @@ def accept_request(
     req.responded_at = datetime.utcnow()
 
     # Consume the room/seat so it no longer shows as available.
-        # Consume the room/seat so it no longer shows as available.
     if req.room:
         _consume_seat(db, req.room, req.seat_requested, req.seat_count)
 
