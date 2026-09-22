@@ -18,14 +18,31 @@ def notify_warden_booking_created(
     hostel_name: str,
     room_number: str,
     booking_id: str,
+    seat_count: int = 1,
+    seat_requested: bool = False,
 ) -> None:
     """Called when a seeker creates a booking request."""
+    if seat_requested and seat_count > 1:
+        body = (
+            f"{seeker_name} requested {seat_count} seats in Room {room_number} "
+            f"at {hostel_name}."
+        )
+    elif seat_requested:
+        body = (
+            f"{seeker_name} requested a seat in Room {room_number} "
+            f"at {hostel_name}."
+        )
+    else:
+        body = (
+            f"{seeker_name} requested Room {room_number} at {hostel_name}."
+        )
+
     db.add(
         Notification(
             user_id=warden_id,
             type=NotificationType.booking_created,
             title="New booking request",
-            body=f"{seeker_name} requested Room {room_number} at {hostel_name}.",
+            body=body,
             related_id=booking_id,
         )
     )
