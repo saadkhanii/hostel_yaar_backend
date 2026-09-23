@@ -90,8 +90,6 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
 
-    # Same error for "no such user" and "wrong password" -- don't reveal
-    # which one it was, so attackers can't use this to discover valid emails.
     invalid_credentials = HTTPException(status_code=401, detail="Invalid email or password")
 
     if not user or not user.hashed_password:
@@ -99,7 +97,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     if not verify_password(payload.password, user.hashed_password):
         raise invalid_credentials
 
-        return _auth_response(user, db)
+    return _auth_response(user, db)
 
 
 # ---------- forgot_password.dart -> POST /auth/forgot-password ----------
@@ -211,7 +209,7 @@ def google_auth(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
 
-        return _auth_response(user, db)
+    return _auth_response(user, db)
 
 # ---------- Profile / Account ----------
 
