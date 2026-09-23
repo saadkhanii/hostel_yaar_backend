@@ -12,6 +12,8 @@ from app.schemas import (
     SignupRequest,
     LoginRequest,
     AuthResponse,
+    RefreshRequest,
+    AccessTokenResponse,
     ForgotPasswordRequest,
     VerifyOtpRequest,
     ResetPasswordRequest,
@@ -21,17 +23,38 @@ from app.schemas import (
     ChangePasswordRequest,
     FcmTokenRequest,
 )
-from app.utils.security import hash_password, verify_password, create_access_token
+from app.models import User, PasswordResetOTP, UserRole, RefreshToken
+from app.utils.security import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    generate_refresh_token,
+    refresh_token_expiry,
+)
 from app.utils.otp import generate_otp_code, send_otp_email
 from app.utils.google_auth import verify_google_id_token, InvalidGoogleTokenError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _auth_response(user: User) -> AuthResponse:
-    token = create_access_token(user_id=user.id, email=user.email, role=user.role.value)
+def _auth_response(user: User, db: Session) -> AuthResponse:
+    """Build a login/signup response with both an access token (short-
+    lived JWT) and a refresh token (long-lived, stored in the DB)."""
+    token = create_access_token(
+        user_id=user.id, email=user.email, role=user.role.value
+    )
+
+    refresh = RefreshToken(
+        user_id=user.id,
+        token=generate_refresh_token(),
+        expires_at=refresh_token_expiry(),
+    )
+    db.add(refresh)
+    db.commit()
+
     return AuthResponse(
         access_token=token,
+        refresh_token=refresh.token,
         user_id=user.id,
         full_name=user.full_name,
         email=user.email,
@@ -58,7 +81,7 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    return _auth_response(user)
+    return _auth_response(user, db)
 
 
 # ---------- login.dart -> POST /auth/login ----------
@@ -76,7 +99,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     if not verify_password(payload.password, user.hashed_password):
         raise invalid_credentials
 
-    return _auth_response(user)
+        return _auth_response(user, db)
 
 
 # ---------- forgot_password.dart -> POST /auth/forgot-password ----------
@@ -188,7 +211,7 @@ def google_auth(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
 
-    return _auth_response(user)
+        return _auth_response(user, db)
 
 # ---------- Profile / Account ----------
 
@@ -306,4 +329,76 @@ def update_fcm_token(
 
     user.fcm_token = payload.fcm_token
     db.commit()
+    return {"status": "ok"}
+
+# ---------- Refresh tokens ----------
+
+@router.post("/refresh", response_model=AccessTokenResponse)
+def refresh_access_token(payload: RefreshRequest, db: Session = Depends(get_db)):
+    """Exchange a valid refresh token for a fresh access token.
+
+    Refresh-token rotation: the incoming refresh token is revoked and a
+    new one is issued alongside the new access token.
+    """
+    row = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.token == payload.refresh_token)
+        .first()
+    )
+    if row is None or row.revoked_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or revoked refresh token",
+        )
+    if row.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has expired",
+        )
+
+    user = db.query(User).filter(User.id == row.user_id).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User no longer exists",
+        )
+
+    # Rotate: revoke the old refresh token, issue a new one.
+    row.revoked_at = datetime.utcnow()
+
+    new_refresh = RefreshToken(
+        user_id=user.id,
+        token=generate_refresh_token(),
+        expires_at=refresh_token_expiry(),
+    )
+    db.add(new_refresh)
+    db.commit()
+
+    new_access = create_access_token(
+        user_id=user.id, email=user.email, role=user.role.value
+    )
+
+    return AccessTokenResponse(
+        access_token=new_access,
+        refresh_token=new_refresh.token,
+    )
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+def logout(payload: RefreshRequest, db: Session = Depends(get_db)):
+    """Revoke the given refresh token. Idempotent — logging out with an
+    already-revoked token still returns 200.
+
+    Note: the access token can't be revoked (it's stateless) — it will
+    still work until it expires. But because it's short-lived, that's a
+    small window. The refresh token, however, is dead on arrival.
+    """
+    row = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.token == payload.refresh_token)
+        .first()
+    )
+    if row is not None and row.revoked_at is None:
+        row.revoked_at = datetime.utcnow()
+        db.commit()
+
     return {"status": "ok"}

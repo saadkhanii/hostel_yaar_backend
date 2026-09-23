@@ -305,3 +305,34 @@ class Notification(Base):
     created_at = Column(DateTime, default=lambda: datetime.utcnow())
 
     user = relationship("User")
+
+class RefreshToken(Base):
+    """A long-lived token that lets the client obtain new access tokens
+    without re-authenticating. Stored server-side so it can be revoked.
+
+    One row per active session. A user with the app on two devices will
+    have two rows. Logout revokes one (or all) rows.
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # A random URL-safe string, not a JWT — it's looked up in the DB on
+    # every refresh, so it doesn't need to be self-describing.
+    token = Column(String, unique=True, index=True, nullable=False)
+
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.utcnow())
+
+    # Set when the token is used to refresh, logged out, or otherwise
+    # invalidated. A revoked token can't be reused.
+    revoked_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")

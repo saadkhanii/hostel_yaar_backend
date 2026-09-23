@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24  # 1 day
 
+    # How long a refresh token is valid. After this, the user must log
+    # in again with their password.
+    refresh_token_expire_days: int = 30
+
     # --- Google OAuth (used to verify tokens the Flutter app sends us) ---
     # This is the "Web client ID" from Google Cloud Console, NOT a secret.
     google_client_id: str = ""

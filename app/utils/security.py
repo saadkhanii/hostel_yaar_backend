@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import secrets
 
 from jose import jwt, JWTError
 from passlib.context import CryptContext
@@ -40,3 +41,20 @@ def decode_access_token(token: str) -> dict | None:
         return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
     except JWTError:
         return None
+
+
+
+def generate_refresh_token() -> str:
+    """Generate a cryptographically random, URL-safe refresh token.
+
+    64 bytes of entropy, base64-url encoded — long enough that guessing
+    is infeasible.
+    """
+    return secrets.token_urlsafe(64)
+
+
+def refresh_token_expiry() -> datetime:
+    """When a freshly-issued refresh token should expire."""
+    from app.config import settings
+
+    return datetime.utcnow() + timedelta(days=settings.refresh_token_expire_days)
