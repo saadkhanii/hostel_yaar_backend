@@ -72,7 +72,11 @@ class User(Base):
     # yet — the Flutter side falls back to initials.
     profile_picture_url = Column(String, nullable=True)
 
-    role = Column(Enum(UserRole), nullable=False, default=UserRole.seeker)
+    role = Column(
+        Enum(UserRole, values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+        default=UserRole.seeker,
+    )
 
     # Set when the account was created/linked via "Continue with Google".
     google_id = Column(String, unique=True, nullable=True)
@@ -127,7 +131,10 @@ class Hostel(Base):
     name = Column(String, nullable=False)
     city = Column(String, nullable=False)
     address = Column(String, nullable=False)
-    type = Column(Enum(HostelType), nullable=False)
+    type = Column(
+        Enum(HostelType, values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+    )
 
     # Nullable for now; will be populated when the map view is built.
     latitude = Column(Float, nullable=True)
@@ -174,7 +181,10 @@ class Room(Base):
     )
 
     number = Column(String, nullable=False)      # "101", "Ground Floor A"
-    booking_type = Column(Enum(BookingType), nullable=False)
+    booking_type = Column(
+        Enum(BookingType, values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+    )
     room_type = Column(Integer, nullable=False)   # 1–6 seater
     available_seats = Column(Integer, nullable=False, default=0)
     attached_washroom = Column(Boolean, nullable=False, default=False)
@@ -261,7 +271,7 @@ class BookingRequest(Base):
     warden_reply = Column(Text, nullable=True)
 
     status = Column(
-        Enum(BookingStatus),
+        Enum(BookingStatus, values_callable=lambda e: [m.value for m in e]),
         nullable=False,
         default=BookingStatus.pending,
         index=True,
@@ -291,7 +301,10 @@ class Notification(Base):
         nullable=False,
         index=True,
     )
-    type = Column(Enum(NotificationType), nullable=False)
+    type = Column(
+        Enum(NotificationType, values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+    )
 
     title = Column(String, nullable=False)
     body = Column(String, nullable=True)
@@ -336,3 +349,57 @@ class RefreshToken(Base):
     revoked_at = Column(DateTime, nullable=True)
 
     user = relationship("User")
+
+# app/models.py  (additions)
+
+class Conversation(Base):
+    """
+    A chat thread between a seeker and a warden, scoped to one hostel.
+
+    Unique on (seeker_id, warden_id, hostel_id) so opening the chat from a
+    hostel page always lands in the same thread instead of creating a new one.
+    """
+    __tablename__ = "conversations"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    seeker_id = Column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    warden_id = Column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Nullable so we can still have ad-hoc threads later (e.g. support chat).
+    hostel_id = Column(
+        String, ForeignKey("hostels.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    created_at = Column(DateTime, default=lambda: datetime.utcnow())
+    # Bumped on every new message so the inbox can sort by recency cheaply.
+    last_message_at = Column(DateTime, default=lambda: datetime.utcnow(), index=True)
+
+    messages = relationship(
+        "Message",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="Message.created_at",
+    )
+    seeker = relationship("User", foreign_keys=[seeker_id])
+    warden = relationship("User", foreign_keys=[warden_id])
+
+
+class Message(Base):
+    """A single message in a Conversation. `read_at` null == unread."""
+    __tablename__ = "messages"
+
+    id = Column(String, primary_key=True, default=_uuid)
+    conversation_id = Column(
+        String,
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sender_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    text = Column(String, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.utcnow(), index=True)
+    read_at = Column(DateTime, nullable=True)
+
+    conversation = relationship("Conversation", back_populates="messages")

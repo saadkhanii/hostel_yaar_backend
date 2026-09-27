@@ -87,3 +87,9 @@ Roadmap
 □ Real email delivery (SMTP / SendGrid)
 □ Migrate to PostgreSQL
 □ Alembic migrations
+
+## Live
+
+Backend is deployed at: https://hostel-yaar-backend.onrender.com
+
+API docs: https://hostel-yaar-backend.onrender.com/docs

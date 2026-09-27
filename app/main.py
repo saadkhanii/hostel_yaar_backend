@@ -2,10 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routers import auth
 from app.routers import (
     auth,
     booking_requests,
+    chat,
+    chat,
     hostels,
     notifications,
     saved_hostels,
@@ -32,6 +33,7 @@ app.include_router(hostels.router)
 app.include_router(saved_hostels.router)
 app.include_router(booking_requests.router)
 app.include_router(notifications.router)
+app.include_router(chat.router)
 
 
 @app.get("/")

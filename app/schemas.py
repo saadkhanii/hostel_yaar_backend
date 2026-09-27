@@ -287,3 +287,45 @@ class AccessTokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+class StartConversationRequest(BaseModel):
+    """Seeker opens a chat with a warden about a specific hostel."""
+    other_user_id: str
+    hostel_id: str | None = None
+
+
+class ConversationOut(BaseModel):
+    id: str
+    seeker_id: str
+    warden_id: str
+    hostel_id: str | None
+    last_message_at: datetime
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ConversationPreview(BaseModel):
+    id: str
+    other_user_id: str          # the other participant (still useful for actions)
+    hostel_id: str | None
+    display_name: str           # hostel name OR seeker name, per viewer
+    subtitle: str               # "Warden" or "Seeker"
+    last_message_text: str | None
+    last_message_at: datetime
+    unread_count: int
+
+
+class MessageOut(BaseModel):
+    id: str
+    conversation_id: str
+    sender_id: str
+    text: str
+    created_at: datetime
+    read_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
+class SendMessageRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)

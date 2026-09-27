@@ -208,17 +208,35 @@ def create_booking_request(
         hostel_name=req.hostel.name if req.hostel else "",
         room_number=req.room.number if req.room else "",
         booking_id=req.id,
+        seat_count=req.seat_count,
+        seat_requested=req.seat_requested,
     )
     db.commit()
 
     # Send a push to the warden's device, if any.
     warden = db.query(User).filter(User.id == req.hostel.warden_id).first()
     if warden and warden.fcm_token:
+        # Build the same seat-aware summary used for the in-app notification.
+        seeker_label = req.seeker.full_name if req.seeker else "A seeker"
+        room_label = req.room.number if req.room else ""
+        if req.seat_requested and req.seat_count > 1:
+            push_body = (
+                f"{seeker_label} requested {req.seat_count} seats in Room {room_label}."
+            )
+        elif req.seat_requested:
+            push_body = f"{seeker_label} requested a seat in Room {room_label}."
+        else:
+            push_body = f"{seeker_label} requested Room {room_label}."
+
         send_push(
             token=warden.fcm_token,
             title="New booking request",
-            body=f"{req.seeker.full_name if req.seeker else 'A seeker'} requested Room {req.room.number if req.room else ''}.",
-            data={"type": "booking_created", "booking_id": req.id},
+            body=push_body,
+            data={
+                "type": "booking_created",
+                "booking_id": req.id,
+                "seat_count": str(req.seat_count),
+            },
         )
 
     return _to_response(req)
