@@ -310,7 +310,8 @@ class ConversationPreview(BaseModel):
     other_user_id: str          # the other participant (still useful for actions)
     hostel_id: str | None
     display_name: str           # hostel name OR seeker name, per viewer
-    subtitle: str               # "Warden" or "Seeker"
+    subtitle: str 
+    avatar_url: str | None = None              # "Warden" or "Seeker"
     last_message_text: str | None
     last_message_at: datetime
     unread_count: int

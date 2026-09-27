@@ -6,7 +6,6 @@ from app.routers import (
     auth,
     booking_requests,
     chat,
-    chat,
     hostels,
     notifications,
     saved_hostels,
