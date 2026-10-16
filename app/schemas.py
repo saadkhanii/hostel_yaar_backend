@@ -348,6 +348,7 @@ class AiSearchFilters(BaseModel):
     facilities: list[str] = Field(default_factory=list)
     type: Optional[HostelType] = None          # Boys / Girls / Mixed
     booking_type: Optional[BookingType] = None # Room / Seat
+    room_type: Optional[int] = Field(default=None, ge=1, le=6)
 
 
 class AiSearchResponse(BaseModel):

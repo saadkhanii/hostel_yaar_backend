@@ -37,6 +37,8 @@ JSON schema you must return:
                                     // "Refrigerator", "Water Cooler"
   "type": "Boys" or "Girls" or "Mixed" or null,
   "booking_type": "Room" or "Seat" or null,
+  "room_type": integer or null,     // seater count 1-6: "single"=1, "double"=2,
+                                    // "triple"=3, "N seater"=N
   "explanation": string             // one short sentence summarizing what you understood,
                                     // starting with "Looking for"
 }
@@ -46,6 +48,9 @@ Rules:
 - If the user says "my own room" or "whole room" or "complete room", booking_type = "Room".
 - If they say "seat", "bed", "shared", "per seat", booking_type = "Seat".
 - "girls only" or "for girls" -> type = "Girls". Same for Boys. Otherwise Mixed or null.
+- For room_type: "single" = 1, "double" = 2, "triple" = 3, "4 seater" = 4, etc.
+  Only set room_type if the user explicitly mentions a seater count or one of those words.
+  If they just say "room" without a number, leave room_type null.
 - If a field is not mentioned, use null (or [] for facilities).
 - Never invent facilities the user didn't mention.
 - Never invent a city if the user didn't name one.
@@ -72,8 +77,6 @@ def _get_genai_client() -> genai.Client:
     return _genai_client
 
 
-# JSON schema Gemini must conform to. Duplicated in _call_llm as the
-# response_schema argument.
 _RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -93,6 +96,12 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
             "type": "string",
             "enum": ["Room", "Seat"],
             "nullable": True,
+        },
+        "room_type": {
+            "type": "integer",
+            "nullable": True,
+            "minimum": 1,
+            "maximum": 6,
         },
         "explanation": {"type": "string"},
     },
@@ -126,7 +135,6 @@ def _call_llm(query: str) -> dict[str, Any]:
     raw = (response.text or "{}").strip()
 
     # Gemini sometimes wraps JSON in a markdown fence even in JSON mode.
-    # Strip it if present.
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
@@ -161,19 +169,27 @@ def _apply_filters(db: Session, filters: AiSearchFilters) -> list[Hostel]:
     if filters.facilities:
         q = q.filter(Hostel.facilities.contains(filters.facilities))
 
+    # Price, booking_type and room_type all live on Room, so join.
     if (
         filters.max_price is not None
         or filters.min_price is not None
         or filters.booking_type is not None
+        or filters.room_type is not None
     ):
-        # Price and booking_type live on rooms, so join.
         q = q.join(Room, Room.hostel_id == Hostel.id)
+
         if filters.booking_type:
             q = q.filter(Room.booking_type == filters.booking_type)
+
+        if filters.room_type is not None:
+            q = q.filter(Room.room_type == filters.room_type)
+
         if filters.max_price is not None:
             q = q.filter(Room.price <= filters.max_price)
+
         if filters.min_price is not None:
             q = q.filter(Room.price >= filters.min_price)
+
         q = q.distinct()
 
     return q.limit(50).all()
@@ -228,9 +244,6 @@ def ai_search(
     """
     data = _call_llm(payload.query)
 
-    # Coerce/validate — the LLM sometimes returns junk. Pydantic will
-    # reject invalid enum values and fall back to an empty filter set
-    # so the user still sees *something*.
     try:
         filters = AiSearchFilters(**data)
     except Exception as e:
