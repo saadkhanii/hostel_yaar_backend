@@ -52,6 +52,7 @@ async def reverse_geocode(
                     "format": "json",
                     "zoom": 18,       # building-level detail
                     "addressdetails": 0,
+                    "accept-language": "en",  
                 },
                 headers={"User-Agent": _USER_AGENT},
             )
