@@ -9,6 +9,7 @@ from app.routers import (
     hostels,
     notifications,
     saved_hostels,
+    ai,
 )
 
 # Creates tables if they don't exist yet. Fine for now; once this app is
@@ -33,6 +34,7 @@ app.include_router(saved_hostels.router)
 app.include_router(booking_requests.router)
 app.include_router(notifications.router)
 app.include_router(chat.router)
+app.include_router(ai.router)
 
 
 @app.get("/")

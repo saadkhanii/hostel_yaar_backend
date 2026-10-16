@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # This is the "Web client ID" from Google Cloud Console, NOT a secret.
     google_client_id: str = ""
 
+     # --- Gemini (LLM for AI search) ---
+    gemini_api_key: str = ""
+
     # --- Firebase Admin SDK (for sending push notifications) ---
     # Path to the service account JSON file. In production this points
     # at a file mounted from an environment variable.

@@ -330,3 +330,27 @@ class MessageOut(BaseModel):
 
 class SendMessageRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+
+# ---------- AI Search ----------
+
+class AiSearchRequest(BaseModel):
+    """Seeker types a free-text query, e.g.
+    'student, budget 15k, wifi and meals, want my own room'."""
+    query: str = Field(min_length=3, max_length=500)
+
+
+class AiSearchFilters(BaseModel):
+    """What the LLM extracts from the free text. All fields optional —
+    the LLM fills what it can infer and leaves the rest None."""
+    city: Optional[str] = None
+    max_price: Optional[int] = Field(default=None, ge=0)
+    min_price: Optional[int] = Field(default=None, ge=0)
+    facilities: list[str] = Field(default_factory=list)
+    type: Optional[HostelType] = None          # Boys / Girls / Mixed
+    booking_type: Optional[BookingType] = None # Room / Seat
+
+
+class AiSearchResponse(BaseModel):
+    filters: AiSearchFilters
+    explanation: str
+    hostels: list[HostelSummary] = Field(default_factory=list)

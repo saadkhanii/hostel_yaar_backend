@@ -128,10 +128,17 @@ def list_conversations(
             )
             display_name = hostel.name if hostel else "Hostel"
             subtitle = "Warden"
+            avatar_url = (
+                hostel.photos[0]
+                if hostel and hostel.photos
+                else None
+            )
         else:
             # Warden talks to a person.
             display_name = other.full_name if other else "Unknown"
             subtitle = "Seeker"
+            avatar_url = other.profile_picture_url if other else None
+
 
         last_msg = (
             db.query(Message)
@@ -157,6 +164,7 @@ def list_conversations(
                 hostel_id=c.hostel_id,
                 display_name=display_name,
                 subtitle=subtitle,
+                avatar_url=avatar_url,   # <-- new
                 last_message_text=last_msg.text if last_msg else None,
                 last_message_at=c.last_message_at,
                 unread_count=unread,
