@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     # in again with their password.
     refresh_token_expire_days: int = 30
 
+    locationiq_api_key: str = ""
+
     # --- Google OAuth (used to verify tokens the Flutter app sends us) ---
     # This is the "Web client ID" from Google Cloud Console, NOT a secret.
     google_client_id: str = ""
