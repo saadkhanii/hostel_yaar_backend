@@ -17,6 +17,7 @@ from app.schemas import (
     HostelSummary,
 )
 from app.utils.deps import get_current_user
+from sqlalchemy import and_, or_
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -154,22 +155,17 @@ def _call_llm(query: str) -> dict[str, Any]:
 # ── Filter application ──────────────────────────────────────────────────
 
 def _apply_filters(db: Session, filters: AiSearchFilters) -> list[Hostel]:
-    """Apply the extracted filters to the hostels query."""
     q = db.query(Hostel).filter(Hostel.active.is_(True))
 
     if filters.city:
-        # Case-insensitive contains, so "lahore" matches "Lahore".
         q = q.filter(Hostel.city.ilike(f"%{filters.city}%"))
 
     if filters.type:
         q = q.filter(Hostel.type == filters.type)
 
-    # Facilities is JSONB — we want hostels that contain ALL the requested
-    # facilities. Postgres JSONB @> does the containment check.
     if filters.facilities:
         q = q.filter(Hostel.facilities.contains(filters.facilities))
 
-    # Price, booking_type and room_type all live on Room, so join.
     if (
         filters.max_price is not None
         or filters.min_price is not None
@@ -189,6 +185,20 @@ def _apply_filters(db: Session, filters: AiSearchFilters) -> list[Hostel]:
 
         if filters.min_price is not None:
             q = q.filter(Room.price >= filters.min_price)
+
+        # NEW — only count rooms that are actually available.
+        # Whole rooms: vacant = true. Per-seat: available_seats > 0.
+        availability_clause = or_(
+            and_(
+                Room.booking_type == BookingType.room,
+                Room.vacant.is_(True),
+            ),
+            and_(
+                Room.booking_type == BookingType.seat,
+                Room.available_seats > 0,
+            ),
+        )
+        q = q.filter(availability_clause)
 
         q = q.distinct()
 
