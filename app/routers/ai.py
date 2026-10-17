@@ -45,6 +45,7 @@ JSON schema you must return:
 }
 
 Rules:
+- If the user mentions a specific hostel name (e.g. "Green Valley", "Al Mustafa"), put that name in the `name` field. Otherwise leave it null.
 - Interpret "k" as thousands. "15k" = 15000. "under 20" when talking about rent means 20000.
 - If the user says "my own room" or "whole room" or "complete room", booking_type = "Room".
 - If they say "seat", "bed", "shared", "per seat", booking_type = "Seat".
@@ -81,6 +82,7 @@ def _get_genai_client() -> genai.Client:
 _RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
+        "name": {"type": "string", "nullable": True},
         "city": {"type": "string", "nullable": True},
         "min_price": {"type": "integer", "nullable": True},
         "max_price": {"type": "integer", "nullable": True},
@@ -157,6 +159,9 @@ def _call_llm(query: str) -> dict[str, Any]:
 def _apply_filters(db: Session, filters: AiSearchFilters) -> list[Hostel]:
     q = db.query(Hostel).filter(Hostel.active.is_(True))
 
+    if filters.name:
+        q = q.filter(Hostel.name.ilike(f"%{filters.name}%"))
+        
     if filters.city:
         q = q.filter(Hostel.city.ilike(f"%{filters.city}%"))
 

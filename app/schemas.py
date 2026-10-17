@@ -342,6 +342,7 @@ class AiSearchRequest(BaseModel):
 class AiSearchFilters(BaseModel):
     """What the LLM extracts from the free text. All fields optional —
     the LLM fills what it can infer and leaves the rest None."""
+    name: Optional[str] = None 
     city: Optional[str] = None
     max_price: Optional[int] = Field(default=None, ge=0)
     min_price: Optional[int] = Field(default=None, ge=0)
