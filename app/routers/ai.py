@@ -30,6 +30,7 @@ and return them as JSON. Output ONLY valid JSON — no prose, no markdown.
 
 JSON schema you must return:
 {
+  "name": string or null,           // specific hostel name if mentioned
   "city": string or null,           // e.g. "Lahore", "Karachi"
   "min_price": integer or null,     // monthly rent lower bound in PKR
   "max_price": integer or null,     // monthly rent upper bound in PKR
